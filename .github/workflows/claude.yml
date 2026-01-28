@@ -2,7 +2,7 @@ name: Run Claude Code
 
 on:
   schedule:
-    - cron: "0 */5 * * *"
+    - cron: "0 * * * *"
   workflow_dispatch:
 
 jobs:
@@ -11,9 +11,51 @@ jobs:
     permissions:
       id-token: write
     steps:
+      - name: Restore last run timestamp
+        uses: actions/cache/restore@v5
+        with:
+          path: .last-run
+          key: claude-last-run-
+          restore-keys: claude-last-run-
+
+      - name: Check if 5 hours have passed
+        id: check
+        run: |
+          NOW=$(date +%s)
+
+          if [ -f .last-run ]; then
+            LAST=$(cat .last-run)
+            DIFF=$((NOW - LAST))
+            HOURS=$((DIFF / 3600))
+            MINS=$((DIFF % 3600 / 60))
+
+            if [ $DIFF -lt 18000 ]; then
+              echo "Only ${HOURS}h ${MINS}m since last run. Skipping."
+              echo "should_run=false" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+
+            echo "${HOURS}h ${MINS}m since last run. Proceeding."
+          else
+            echo "No previous run found. Proceeding."
+          fi
+
+          echo "$NOW" > .last-run
+          echo "should_run=true" >> "$GITHUB_OUTPUT"
+
+      - name: Save timestamp
+        if: steps.check.outputs.should_run == 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: .last-run
+          key: claude-last-run-${{ github.run_id }}
+
       - name: Checkout
+        if: steps.check.outputs.should_run == 'true'
         uses: actions/checkout@v6
+
       - name: Run Claude Code
+        if: steps.check.outputs.should_run == 'true'
         uses: anthropics/claude-code-action@v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
