@@ -40,15 +40,7 @@ jobs:
             echo "No previous run found. Proceeding."
           fi
 
-          echo "$NOW" > .last-run
           echo "should_run=true" >> "$GITHUB_OUTPUT"
-
-      - name: Save timestamp
-        if: steps.check.outputs.should_run == 'true'
-        uses: actions/cache/save@v4
-        with:
-          path: .last-run
-          key: claude-last-run-${{ github.run_id }}
 
       - name: Checkout
         if: steps.check.outputs.should_run == 'true'
@@ -64,3 +56,15 @@ jobs:
           claude_args: |
             --dangerously-skip-permissions
             --model claude-haiku-4-5
+
+      - name: Save timestamp
+        if: steps.check.outputs.should_run == 'true'
+        run: |
+          date +%s > .last-run
+
+      - name: Update cache
+        if: steps.check.outputs.should_run == 'true'
+        uses: actions/cache/save@v5
+        with:
+          path: .last-run
+          key: claude-last-run-${{ github.run_id }}
